@@ -1,0 +1,7 @@
+{
+  "name": "Abhi - X Voice ",
+  "description": "A sci-fi inspired voice assistant that uses Gemini to understand commands in Hindi, search YouTube, and provide voice replies using ElevenLabs.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
