@@ -9,9 +9,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --grid-color: rgba(0, 255, 255, 0.1);
+        --grid-size: 50px;
+        --glow-color: rgba(0, 255, 255, 0.3);
+        --animation-speed: 40s;
+      }
       body {
         font-family: 'Orbitron', sans-serif;
         background-color: #0a0a1a;
+        overflow: hidden; /* Hide scrollbars from background pseudo-elements */
       }
       .glowing-text {
         text-shadow: 0 0 5px rgba(0, 255, 255, 0.7), 0 0 10px rgba(0, 255, 255, 0.5);
@@ -42,6 +49,7 @@
         to { opacity: 1; transform: translateY(0); }
       }
       .animate-fade-in-up {
+        opacity: 0;
         animation: fade-in-up 0.4s ease-out forwards;
       }
       @keyframes float-subtle {
@@ -54,6 +62,66 @@
       }
       .animate-float-subtle {
         animation: float-subtle 4s ease-in-out infinite;
+      }
+      
+      /* --- Background Animation Styles --- */
+      @keyframes scroll-grid {
+        0% { transform: translate(0, 0); }
+        100% { transform: translate(var(--grid-size), var(--grid-size)); }
+      }
+      @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 100px 50px var(--glow-color); }
+        50% { box-shadow: 0 0 120px 60px var(--glow-color); }
+      }
+      #background-animation {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background-color: #0a0a1a;
+        background-image: radial-gradient(ellipse at center, rgba(10, 10, 26, 0) 0%, #0a0a1a 70%);
+      }
+      #background-animation::before {
+        content: '';
+        position: absolute;
+        inset: -100%;
+        background-image:
+          linear-gradient(var(--grid-color) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+        background-size: var(--grid-size) var(--grid-size);
+        animation: scroll-grid var(--animation-speed) linear infinite;
+        transition: background-color 0.5s ease, opacity 0.5s ease;
+        will-change: transform;
+      }
+      #background-animation::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 1px;
+        height: 1px;
+        border-radius: 50%;
+        box-shadow: 0 0 100px 50px var(--glow-color);
+        animation: pulse-glow 5s ease-in-out infinite;
+        transition: box-shadow 0.5s ease;
+      }
+
+      /* State: Listening */
+      body[data-assistant-state="listening"] {
+        --grid-color: rgba(255, 0, 0, 0.15);
+        --glow-color: rgba(255, 0, 0, 0.4);
+        --animation-speed: 10s;
+      }
+      /* State: Thinking */
+      body[data-assistant-state="thinking"] {
+        --grid-color: rgba(250, 204, 21, 0.15);
+        --glow-color: rgba(250, 204, 21, 0.4);
+        --animation-speed: 20s;
+      }
+      /* State: Speaking */
+      body[data-assistant-state="speaking"] {
+        --grid-color: rgba(52, 211, 153, 0.15);
+        --glow-color: rgba(52, 211, 153, 0.4);
+        --animation-speed: 30s;
       }
     </style>
   <script type="importmap">
@@ -69,6 +137,8 @@
 </script>
 </head>
   <body>
+    <div id="background-animation"></div>
     <div id="root"></div>
+    <script src="https://www.youtube.com/iframe_api"></script>
   </body>
 </html>

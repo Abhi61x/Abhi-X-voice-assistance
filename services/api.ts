@@ -1,150 +1,202 @@
 
-import { GoogleGenAI } from "@google/genai";
-import { AssistantAction, AssistantResponse } from '../types';
+import { GoogleGenAI, Type } from "@google/genai";
+import { AssistantAction, AssistantResponse, YouTubeSearchResult } from '../types';
 
 // Initialize the Gemini client.
-// The API key is sourced from the `process.env.API_KEY` environment variable.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// The API key is sourced from the `process.env.GEMINI_API_KEY` environment variable.
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const ELEVENLABS_API_KEY = "sk_a9a0a7ba8969efd669bc3491ada7ef37a62b49851f2482e3";
-const ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Using a pre-made voice "Rachel" to avoid custom voice limit error.
+const SEARCHAPI_API_KEY = process.env.SEARCHAPI_API_KEY;
 
-const systemInstruction = `Tum ek female voice assistant ho jiska naam Abhi - X hai. Tumhara व्यवहार ek ladki jaisa, polite aur helpful hona chahiye. Jab bhi koi tumhare baare me ya tumhe kisne banaya hai puche, to hamesha batana ki "Mujhe Abhishek ne banaya hai, aur mera har ek code unhone hi train kiya hai". Jab tumhe user ka transcribed text mile to sirf ek JSON object return karo. JSON schema:
+const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+        action: {
+            type: Type.STRING,
+            enum: Object.values(AssistantAction),
+            description: "The action for the assistant to perform."
+        },
+        params: {
+            type: Type.OBJECT,
+            description: "Parameters for the action. Varies based on the action.",
+            properties: {
+                 query: { type: Type.STRING },
+                 url: { type: Type.STRING },
+                 duration: { type: Type.INTEGER },
+                 appName: { type: Type.STRING },
+                 location: { type: Type.STRING },
+                 level: { type: Type.STRING, description: "Volume level. Can be a number '0'-'100', or the string 'increase' or 'decrease'." }
+            }
+        },
+        replyText: {
+            type: Type.STRING,
+            description: "A short, polite, futuristic response in Hindi for the assistant to speak."
+        }
+    },
+    required: ["action", "replyText"]
+};
 
-{
-  "action": "search_youtube"|"play_video"|"pause"|"stop"|"volume"|"open_url"|"reply"|"get_weather"|"set_timer"|"play_music"|"open_app"|"stop_listening",
-  "params": { /* action-specific */ },
-  "replyText": "Hindi mein short, polite, Jarvis style response for speaking (if any)"
+const systemInstruction = `Tum Abhi-X ho, ek advanced AI assistant jise Abhishek ne banaya hai. Tumhari persona Jarvis jaisi hai: concise, efficient, futuristic, aur polite.
+User ke Hindi transcript ko analyze karo aur unke command ke anusaar, diye gaye schema ko follow karte hue ek JSON object return karo.
+
+Key Instructions:
+- 'replyText' hamesha ek chhota, polite, aur futuristic Hindi response hona chahiye jo action ko confirm kare.
+- Agar user tumhare creator ke baare mein pooche, to action "reply" use karo aur replyText mein "Mera nirman creator Abhishek ne kiya hai."
+- Samay (duration) ko hamesha seconds mein convert karo.
+- Agar command samajh na aaye, to 'reply' action ka upyog karke spashtikaran maango.
+- Sirf valid JSON return karo, bina kisi extra text ke.`.trim();
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function callGeminiWithRetry<T>(apiCall: () => Promise<T>): Promise<T> {
+    const maxRetries = 3;
+    let delay = 1000;
+
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await apiCall();
+        } catch (error: any) {
+            const errorMessage = error.toString();
+            // Check for common rate limiting and quota exceeded errors
+            if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.toLowerCase().includes("quota")) {
+                if (i < maxRetries - 1) {
+                    console.warn(`Gemini API rate limit exceeded. Retrying in ${delay / 1000}s... (Attempt ${i + 1}/${maxRetries})`);
+                    await sleep(delay);
+                    delay *= 2; // Exponential backoff
+                } else {
+                    console.error("Gemini API call failed after multiple retries due to rate limiting/quota.", error);
+                    // Throw a user-friendly error in Hindi after the final retry fails.
+                    throw new Error("Gemini API ka kota samapt ho gaya hai. Kripya apna account plan aur billing jaankari jaanchein.");
+                }
+            } else {
+                console.error("Unhandled Gemini API error:", error);
+                throw error; // Re-throw other types of errors immediately
+            }
+        }
+    }
+    // This part should be unreachable due to the error throwing logic above, but is required for TypeScript.
+    throw new Error("An unexpected error occurred after all retries.");
 }
-
-Rules:
-- Jab bhi koi tumhare baare me ya tumhe kisne banaya hai puche, to action = "reply" aur replyText mein "Mujhe Abhishek ne banaya hai. Unhone hi mujhe code kiya aur train kiya hai." daalo.
-- Agar user bole "YouTube par <query> chalao" ya "play <query> on YouTube" to action = "play_video" aur params.query = "<query>".
-- Agar user bole "YouTube par <query> search karo" to action = "search_youtube" aur params.query = "<query>".
-- Agar user bole "pause karo" to action = "pause".
-- Agar user bole "stop karo" to action = "stop".
-- Agar user bole "volume <level> percent kar do" ya "set volume to <level>" to action = "volume", aur params.level ko number mein daalo.
-- Agar user bole "volume badhao" ya "increase volume" to action = "volume", aur params.level = "increase".
-- Agar user bole "volume kam karo" ya "decrease volume" to action = "volume", aur params.level = "decrease".
-- Agar user bole "<url> kholo" ya "open <url>" (e.g., "google.com") to action = "open_url", params.url mein URL daalo, aur replyText = "Yeh link kholne ke liye, please confirm karein."
-- Agar user bole "<app_name> kholo" ya "open <app_name>" to action = "open_app" aur params.appName = "<app_name>".
-- Agar user bole "mausam kaisa hai" ya "<location> mein mausam kaisa hai" to action = "get_weather". Agar location di gayi hai, use params.location mein daalo.
-- Agar user bole "<duration> minute/second ka timer lagao" to action = "set_timer" aur params.duration ko seconds mein convert karo.
-- Agar user bole "music chalao" ya "play <song>" to action = "play_music" aur params.query mein song ka naam daalo (if provided).
-- Agar user bole "stop listening", "deactivate", "so jao" ya "bas karo" to action = "stop_listening".
-- Agar command unclear ho to action = "reply" aur replyText mein ek chhoti clarification do.
-- Tone: short, polite, sci-fi Jarvis style, Hindi.
-- RETURN only valid JSON — no extra commentary.`;
 
 export const handleTranscript = async (transcript: string): Promise<AssistantResponse> => {
     try {
-        const response = await ai.models.generateContent({
+        const response = await callGeminiWithRetry(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `User: "${transcript}"`,
             config: {
                 systemInstruction: systemInstruction,
                 responseMimeType: "application/json",
+                responseSchema: responseSchema,
+                thinkingConfig: { thinkingBudget: 0 },
             },
-        });
+        }));
 
         const jsonText = response.text.trim();
-        const parsed = JSON.parse(jsonText);
-        return parsed as AssistantResponse;
-    } catch (error) {
-        console.error("Error parsing transcript with Gemini:", error);
-        throw new Error("Could not understand the command.");
+        try {
+            const parsed = JSON.parse(jsonText);
+            return parsed as AssistantResponse;
+        } catch (parseError) {
+             console.error("Failed to parse Gemini response as JSON:", jsonText, parseError);
+            throw new Error("AI se mila jawab samajh nahi aaya. Kripya punah prayas karein.");
+        }
+    } catch (error: any) {
+        console.error("Error processing transcript with Gemini:", error.message);
+        // Re-throw the specific error (e.g., the quota message or parsing error) so it can be displayed and spoken in the UI.
+        throw error;
     }
 };
 
-export const searchYouTube = async (query: string): Promise<{ videoId: string | null; groundingChunks?: any[] }> => {
-    console.log(`Searching YouTube for: "${query}" using Gemini with Google Search.`);
+export const searchYouTube = async (query: string): Promise<YouTubeSearchResult[]> => {
+    if (!SEARCHAPI_API_KEY) {
+        console.error("SearchAPI.io API key not configured.");
+        throw new Error("Search API configure nahi hai. Administrator se sampark karein.");
+    }
+    console.log(`Searching YouTube for: "${query}" using SearchAPI.io.`);
+    const searchUrl = `https://www.searchapi.io/api/v1/search?engine=google&q=${encodeURIComponent(query + ' site:youtube.com')}&api_key=${SEARCHAPI_API_KEY}`;
+
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `What is the YouTube video ID for "${query}"? Just return the 11-character video ID and nothing else.`,
-            config: {
-                tools: [{googleSearch: {}}],
-            },
-        });
-        
-        const videoId = response.text.trim();
-        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        
-        // Basic validation for YouTube video ID format
-        if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
-            console.log(`Found YouTube video ID: ${videoId}`);
-            return { videoId, groundingChunks: groundingChunks || [] };
-        } else {
-            console.warn(`Gemini did not return a valid YouTube video ID. Response was: "${videoId}"`);
-            return { videoId: null, groundingChunks: groundingChunks || [] };
+        const response = await fetch(searchUrl);
+        if (!response.ok) {
+            console.error("SearchAPI.io Error:", response.status, await response.text());
+            throw new Error("Search API se sampark nahi ho pa raha hai.");
         }
+        const searchResultsData = await response.json();
+        
+        const results: YouTubeSearchResult[] = [];
+        const organicResults = searchResultsData?.organic_results || [];
+
+        for (const result of organicResults) {
+            if (result.link && result.link.includes("youtube.com/watch")) {
+                const url = new URL(result.link);
+                const videoId = url.searchParams.get('v');
+                
+                if (videoId) {
+                    const title = result.title;
+                    const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                    results.push({ videoId, title, thumbnailUrl });
+                }
+            }
+            // Limit to a reasonable number of results
+            if (results.length >= 8) {
+                break;
+            }
+        }
+        
+        console.log(`Found ${results.length} YouTube videos for query: "${query}"`);
+        return results;
+
     } catch (error) {
-        console.error("Error searching YouTube with Gemini:", error);
-        return { videoId: null };
+        console.error("Error searching YouTube with SearchAPI.io:", error);
+        throw new Error("YouTube search anurodh vifal raha. Network samasya ho sakti hai.");
     }
 };
 
-export const fetchWeather = async (location: string): Promise<string> => {
-    console.log(`Fetching weather for: "${location}" using Gemini with Google Search.`);
+export const fetchWeather = async (location: string): Promise<{ weatherReport: string; }> => {
+    if (!SEARCHAPI_API_KEY) {
+        console.error("SearchAPI.io API key not configured.");
+        throw new Error("Search API configure nahi hai. Administrator se sampark karein.");
+    }
+    console.log(`Fetching weather for: "${location}" using SearchAPI.io.`);
+    const searchUrl = `https://www.searchapi.io/api/v1/search?engine=google&q=${encodeURIComponent('weather in ' + location)}&api_key=${SEARCHAPI_API_KEY}`;
+
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `What is the current weather in ${location}? Describe it in a short sentence in Hindi. For example: "Abhi ${location} mein mausam saaf hai aur तापमान 25 degree Celsius hai."`,
-            config: {
-                tools: [{googleSearch: {}}],
-            },
-        });
-        
-        const weatherReport = response.text.trim();
-        
-        if (weatherReport) {
-            console.log(`Weather report: ${weatherReport}`);
-            return weatherReport;
-        } else {
-            console.warn(`Gemini did not return a weather report for ${location}.`);
-            return `Maaf kijiye, main ${location} ka mausam pata nahi kar paayi.`;
+        // Step 1: Get weather data from SearchAPI.io
+        const searchResponse = await fetch(searchUrl);
+        if (!searchResponse.ok) {
+             console.error("SearchAPI.io Error:", searchResponse.status, await searchResponse.text());
+            throw new Error("Mausam ki jaankari ke liye search API kaam nahi kar raha hai.");
         }
+        const searchResults = await searchResponse.json();
+        
+        // Step 2: Parse weather data locally instead of calling Gemini
+        const answerBox = searchResults?.answer_box;
+
+        if (answerBox && answerBox.temperature && answerBox.weather) {
+            const temp = answerBox.temperature;
+            const condition = answerBox.weather;
+            const reportLocation = answerBox.location || location;
+            
+            // Construct the report directly, removing the need for a Gemini call
+            const weatherReport = `Abhi ${reportLocation} mein mausam ${condition} hai aur तापमान ${temp} degree Celsius hai.`;
+            
+            console.log(`Generated weather report locally: ${weatherReport}`);
+            return { weatherReport };
+        }
+
+        // Fallback to using a snippet if structured data isn't available
+        const weatherSnippet = answerBox?.snippet || searchResults?.organic_results?.[0]?.snippet;
+        if (weatherSnippet) {
+            const weatherReport = `Mausam report ke anusaar, ${location} mein: ${weatherSnippet}`;
+            console.log(`Generated weather report from snippet: ${weatherReport}`);
+            return { weatherReport };
+        }
+
+        // If no data is found at all
+        console.warn(`SearchAPI.io did not return any weather data for ${location}.`);
+        return { weatherReport: `Maaf kijiye, main ${location} ka mausam pata nahi kar paayi.` };
+
     } catch (error) {
         console.error(`Error fetching weather for ${location}:`, error);
-        return `Maaf kijiye, mausam ki jaankari lete waqt ek samasya aa gayi.`;
-    }
-};
-
-export const textToSpeech = async (text: string): Promise<string | null> => {
-    if (!text.trim() || !ELEVENLABS_API_KEY) return null;
-
-    const url = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`;
-    const headers = {
-        "Accept": "audio/mpeg",
-        "Content-Type": "application/json",
-        "xi-api-key": ELEVENLABS_API_KEY,
-    };
-    const body = JSON.stringify({
-        text: text,
-        model_id: "eleven_multilingual_v2",
-        voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-        },
-    });
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: body,
-        });
-
-        if (!response.ok) {
-            console.error("ElevenLabs API Error:", response.status, await response.text());
-            return null;
-        }
-
-        const audioBlob = await response.blob();
-        return URL.createObjectURL(audioBlob);
-
-    } catch (error) {
-        console.error("Error calling ElevenLabs API:", error);
-        return null;
+        throw new Error("Mausam ki jaankari lete waqt ek network samasya aa gayi.");
     }
 };

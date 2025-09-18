@@ -3,6 +3,7 @@ export enum AssistantAction {
   PlayVideo = "play_video",
   Pause = "pause",
   Stop = "stop",
+  Play = "play",
   Volume = "volume",
   OpenUrl = "open_url",
   Reply = "reply",
@@ -25,4 +26,10 @@ export interface AssistantResponse {
     location?: string;
   };
   replyText: string;
+}
+
+export interface YouTubeSearchResult {
+  videoId: string;
+  title: string;
+  thumbnailUrl: string;
 }
