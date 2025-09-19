@@ -3,126 +3,235 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Abhi - X Voice Assistant</title>
+    <title>Kaniska | Advanced AI Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <style>
       :root {
-        --grid-color: rgba(0, 255, 255, 0.1);
-        --grid-size: 50px;
-        --glow-color: rgba(0, 255, 255, 0.3);
-        --animation-speed: 40s;
+        --bg-color: #020810;
+        --primary-color: #00eaff;
+        --secondary-color: #008cff;
+        --text-color: #d0faff;
+        --border-color: rgba(0, 234, 255, 0.4);
+        --panel-bg: rgba(0, 15, 25, 0.85);
+        --panel-glow: rgba(0, 234, 255, 0.2);
+        --glow-filter: drop-shadow(0 0 4px var(--primary-color));
       }
       body {
         font-family: 'Orbitron', sans-serif;
-        background-color: #0a0a1a;
-        overflow: hidden; /* Hide scrollbars from background pseudo-elements */
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        overflow: hidden;
+      }
+      #matrix-background {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -2;
+        opacity: 0.3;
       }
       .glowing-text {
-        text-shadow: 0 0 5px rgba(0, 255, 255, 0.7), 0 0 10px rgba(0, 255, 255, 0.5);
+        color: var(--primary-color);
+        text-shadow: 0 0 5px var(--primary-color), 0 0 10px var(--primary-color), 0 0 15px var(--secondary-color);
       }
-      .glowing-border {
-        box-shadow: 0 0 15px rgba(0, 255, 255, 0.5), inset 0 0 10px rgba(0, 255, 255, 0.3);
+      .jarvis-panel {
+        position: relative;
+        background: var(--panel-bg);
+        backdrop-filter: blur(8px);
+        border: 1px solid var(--border-color);
+        box-shadow: 0 0 25px var(--panel-glow), inset 0 0 15px var(--panel-glow);
+        border-radius: 0;
       }
-      @keyframes pulse-slow {
-        50% {
-          opacity: .5;
-        }
+      .jarvis-panel::before, .jarvis-panel::after,
+      .panel-content-wrapper::before, .panel-content-wrapper::after {
+        content: '';
+        position: absolute;
+        width: 15px;
+        height: 15px;
+        border-color: var(--primary-color);
+        border-style: solid;
+        opacity: 0.9;
+        filter: var(--glow-filter);
+        animation: flicker 5s linear infinite alternate;
       }
-      .animate-pulse-slow {
-        animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      .jarvis-panel::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+      .jarvis-panel::after { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+      .panel-content-wrapper::before { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
+      .panel-content-wrapper::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+      /* --- Animations --- */
+      @keyframes flicker {
+          0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity: 0.9; filter: drop-shadow(0 0 4px var(--primary-color)); }
+          20%, 24%, 55% { opacity: 0.6; filter: drop-shadow(0 0 8px var(--secondary-color)); }
       }
-      @keyframes spin-reverse {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(-360deg); }
+      @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      @keyframes spin-reverse { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+      @keyframes pulse { 50% { opacity: 0.7; transform: scale(0.98); } }
+      @keyframes fade-in-scale-up {
+        from { opacity: 0; transform: translate(-50%, -45%) scale(0.95); }
+        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
       }
-      .animate-spin-reverse {
-        animation: spin-reverse 2s linear infinite;
+      .animate-fade-in-scale-up { animation: fade-in-scale-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      @keyframes fade-out-scale-down {
+        from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        to { opacity: 0; transform: translate(-50%, -45%) scale(0.95); }
       }
-      .animate-spin-slow {
-        animation: spin 3s linear infinite;
+      .animate-fade-out-scale-down { animation: fade-out-scale-down 0.4s ease-in forwards; }
+
+      /* --- Arc Reactor Button --- */
+      .arc-container {
+        position: relative;
+        width: 180px;
+        height: 180px;
+        filter: var(--glow-filter);
+        transition: transform 0.3s ease-out;
       }
-      @keyframes fade-in-up {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
+      .arc-container:hover { transform: scale(1.05); }
+      .arc-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid transparent;
       }
-      .animate-fade-in-up {
-        opacity: 0;
-        animation: fade-in-up 0.4s ease-out forwards;
+      .ring-1 {
+        border-color: var(--primary-color);
+        animation: spin 20s linear infinite;
+        opacity: 0.5;
       }
-      @keyframes float-subtle {
-        0%, 100% {
-          transform: translateY(0);
-        }
-        50% {
-          transform: translateY(-8px);
-        }
+      .ring-2 {
+        inset: 6px;
+        border-width: 3px;
+        border-top-color: var(--primary-color);
+        border-bottom-color: var(--primary-color);
+        animation: spin-reverse 15s linear infinite;
       }
-      .animate-float-subtle {
-        animation: float-subtle 4s ease-in-out infinite;
+      .ring-3 {
+        inset: 16px;
+        border-width: 1px;
+        border-top-color: var(--primary-color);
+        border-left-color: var(--primary-color);
+        border-right-color: var(--primary-color);
+        animation: spin 10s linear infinite;
+        opacity: 0.8;
+      }
+      .ring-4 {
+        inset: 22px;
+        border: 4px dotted var(--secondary-color);
+        opacity: 0.4;
+        animation: spin 18s linear infinite;
+      }
+      .arc-core {
+        position: absolute;
+        inset: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-image: radial-gradient(circle, var(--primary-color) 0%, var(--bg-color) 70%);
+        box-shadow: inset 0 0 15px var(--primary-color), 0 0 10px var(--secondary-color);
+        transition: all 0.3s ease;
+        animation: pulse 2.5s ease-in-out infinite;
+      }
+      .arc-core svg {
+        transition: all 0.3s ease;
+        filter: drop-shadow(0 0 3px #000);
+      }
+      .arc-container.listening .arc-core, .arc-container.thinking .arc-core {
+        animation-duration: 0.8s;
+        box-shadow: inset 0 0 25px #fff, 0 0 20px var(--primary-color);
+      }
+      .arc-container.listening .ring-2, .arc-container.thinking .ring-2 { animation-duration: 3s; }
+      .arc-container.listening .ring-3, .arc-container.thinking .ring-3 { animation-duration: 2s; }
+      .arc-container.speaking .arc-core { animation-duration: 1.2s; }
+
+      /* Cooldown Timer Animation */
+      .cooldown-circle-animation {
+        stroke-dasharray: 283;
+        stroke-dashoffset: 0;
+        animation: cooldown-timer 60s linear forwards;
+        stroke: #ff3333;
+      }
+      @keyframes cooldown-timer { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 283; } }
+
+      /* --- Code Editor Styles --- */
+      .code-editor-wrapper { position: relative; flex-grow: 1; display: flex; overflow: hidden; background: rgba(0,0,0,0.3); }
+      .line-numbers { padding: 1rem; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 14px; line-height: 1.5; color: rgba(208, 250, 255, 0.4); text-align: right; user-select: none; background-color: rgba(0,0,0,0.2); border-right: 1px solid var(--border-color); overflow-y: hidden; }
+      .editor-main { position: relative; flex-grow: 1; }
+      .editor-main > textarea, .editor-main > pre { margin: 0; padding: 1rem; border: 0; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 0; overflow: auto; }
+      .editor-main > textarea { z-index: 1; background-color: transparent; color: transparent; caret-color: var(--text-color); resize: none; outline: none; }
+      .editor-main > pre { z-index: 0; pointer-events: none; }
+      .code-editor-wrapper code { color: var(--text-color); }
+      .hljs { background: transparent !important; }
+      .find-replace-bar input { background-color: rgba(0,0,0,0.5); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 0; color: var(--text-color); font-family: 'Orbitron', sans-serif; font-size: 12px; width: 140px; }
+      .find-replace-bar input::placeholder { color: rgba(208, 250, 255, 0.4); }
+      .find-replace-bar button { font-size: 12px; padding: 4px 10px; border-radius: 0; }
+
+      /* --- YouTube Fullscreen Mode --- */
+      .jarvis-panel.youtube-mode {
+        background: #000;
+        backdrop-filter: none;
+        border: none;
+        box-shadow: none;
+      }
+      .jarvis-panel.youtube-mode::before, .jarvis-panel.youtube-mode::after,
+      .jarvis-panel.youtube-mode .panel-content-wrapper::before,
+      .jarvis-panel.youtube-mode .panel-content-wrapper::after {
+        display: none;
       }
       
-      /* --- Background Animation Styles --- */
-      @keyframes scroll-grid {
-        0% { transform: translate(0, 0); }
-        100% { transform: translate(var(--grid-size), var(--grid-size)); }
+      /* --- Settings Modal & Select Element --- */
+      #voice-select {
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300eaff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 1rem center;
+        background-size: 1em;
+        padding-right: 2.5rem;
       }
-      @keyframes pulse-glow {
-        0%, 100% { box-shadow: 0 0 100px 50px var(--glow-color); }
-        50% { box-shadow: 0 0 120px 60px var(--glow-color); }
+      #voice-select:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 8px var(--panel-glow);
       }
-      #background-animation {
-        position: fixed;
-        inset: 0;
-        z-index: -1;
-        background-color: #0a0a1a;
-        background-image: radial-gradient(ellipse at center, rgba(10, 10, 26, 0) 0%, #0a0a1a 70%);
+      #voice-select optgroup {
+        background: var(--bg-color);
+        color: var(--secondary-color);
+        font-weight: bold;
       }
-      #background-animation::before {
-        content: '';
-        position: absolute;
-        inset: -100%;
-        background-image:
-          linear-gradient(var(--grid-color) 1px, transparent 1px),
-          linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-        background-size: var(--grid-size) var(--grid-size);
-        animation: scroll-grid var(--animation-speed) linear infinite;
-        transition: background-color 0.5s ease, opacity 0.5s ease;
-        will-change: transform;
-      }
-      #background-animation::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 1px;
-        height: 1px;
-        border-radius: 50%;
-        box-shadow: 0 0 100px 50px var(--glow-color);
-        animation: pulse-glow 5s ease-in-out infinite;
-        transition: box-shadow 0.5s ease;
+      #voice-select option {
+        background: var(--bg-color);
+        color: var(--text-color);
+        padding: 8px;
       }
 
-      /* State: Listening */
-      body[data-assistant-state="listening"] {
-        --grid-color: rgba(255, 0, 0, 0.15);
-        --glow-color: rgba(255, 0, 0, 0.4);
-        --animation-speed: 10s;
+      /* Custom scrollbar */
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background-color: var(--primary-color); border-radius: 0; border: 1px solid var(--bg-color); }
+      ::-webkit-scrollbar-thumb:hover { background-color: var(--text-color); }
+
+      /* HUD Elements */
+      .hud-element {
+        position: fixed;
+        border-color: var(--primary-color);
+        opacity: 0.7;
+        filter: var(--glow-filter);
+        pointer-events: none;
+        z-index: 5;
+        animation: flicker 6s linear infinite alternate;
       }
-      /* State: Thinking */
-      body[data-assistant-state="thinking"] {
-        --grid-color: rgba(250, 204, 21, 0.15);
-        --glow-color: rgba(250, 204, 21, 0.4);
-        --animation-speed: 20s;
-      }
-      /* State: Speaking */
-      body[data-assistant-state="speaking"] {
-        --grid-color: rgba(52, 211, 153, 0.15);
-        --glow-color: rgba(52, 211, 153, 0.4);
-        --animation-speed: 30s;
-      }
+      .corner-bracket { width: 40px; height: 40px; }
+      .corner-top-left { top: 20px; left: 20px; border-top: 2px solid; border-left: 2px solid; }
+      .corner-top-right { top: 20px; right: 20px; border-top: 2px solid; border-right: 2px solid; }
+      .corner-bottom-left { bottom: 20px; left: 20px; border-bottom: 2px solid; border-left: 2px solid; }
+      .corner-bottom-right { bottom: 20px; right: 20px; border-bottom: 2px solid; border-right: 2px solid; }
+      .horizontal-line { height: 1px; width: 25%; background: var(--primary-color); }
+      .vertical-line { width: 1px; height: 25%; background: var(--primary-color); }
+
     </style>
   <script type="importmap">
 {
@@ -136,9 +245,49 @@
 }
 </script>
 </head>
-  <body>
-    <div id="background-animation"></div>
+  <body data-assistant-state="idle">
+    <canvas id="matrix-background"></canvas>
+    <div id="background-vignette" class="fixed inset-0 z-[-1]" style="background: radial-gradient(ellipse at center, transparent 40%, var(--bg-color) 85%);"></div>
     <div id="root"></div>
     <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+      // Matrix background effect
+      const canvas = document.getElementById('matrix-background');
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const fontSize = 14;
+      const columns = canvas.width / fontSize;
+      const drops = Array.from({ length: columns }).map(() => 1);
+
+      function drawMatrix() {
+        ctx.fillStyle = 'rgba(2, 8, 16, 0.05)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
+        ctx.font = fontSize + 'px monospace';
+
+        for (let i = 0; i < drops.length; i++) {
+          const text = chars[Math.floor(Math.random() * chars.length)];
+          ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+          if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+            drops[i] = 0;
+          }
+          drops[i]++;
+        }
+      }
+
+      setInterval(drawMatrix, 40);
+      window.addEventListener('resize', () => {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+          drops.length = 0;
+          const newColumns = canvas.width / fontSize;
+          for(let i = 0; i < newColumns; i++) drops.push(1);
+      });
+    </script>
   </body>
 </html>
